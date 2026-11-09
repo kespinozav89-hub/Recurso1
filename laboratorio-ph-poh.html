@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laboratorio Virtual de pH y pOH</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink:#19343d; --teal:#174c56; --paper:#f7f4ea; }
+    * { box-sizing:border-box; }
+    body { margin:0; width:100%; font-family:"DM Sans",sans-serif; color:var(--ink); }
+    .app-shell { width:100%; min-height:100vh; position:relative; isolation:isolate; background:radial-gradient(circle at 90% 0%,#e3eee9 0%,transparent 34%),var(--paper); }
+    .display { font-family:"Fraunces",serif; }
+    .lab-panel { background:#e8eee9; border:1px solid #d1ded7; }
+    .bench { background:linear-gradient(180deg,#254f58 0%,#173b44 100%); box-shadow:inset 0 -13px 0 #102e36; }
+    .beaker { width:72px; height:84px; border:4px solid #b9d4d5; border-top:0; border-radius:4px 4px 14px 14px; position:relative; display:block; background:rgba(255,255,255,.28); box-shadow:inset 7px 0 0 rgba(255,255,255,.28); overflow:hidden; }
+    .beaker:before { content:""; position:absolute; top:0; left:-1px; right:-1px; height:5px; background:#b9d4d5; }
+    .liquid { position:absolute; bottom:0; left:0; right:0; height:61%; background:var(--liquid); opacity:.84; }
+    .liquid:before { content:""; position:absolute; top:-4px; left:0; right:0; height:8px; border-radius:50%; background:rgba(255,255,255,.52); }
+    .glass-shine { position:absolute; top:15px; left:8px; width:7px; height:38px; border-radius:8px; background:rgba(255,255,255,.45); }
+    .sample { min-height:130px; transition:transform .2s,background .2s; }
+    .sample:hover,.sample:focus-visible,.sample.drag-over { transform:translateY(-5px); background:rgba(255,255,255,.14); }
+    .sample.selected { outline:2px solid #ffe38b; outline-offset:2px; background:rgba(255,255,255,.1); }
+    .strip { width:32px; height:112px; border:2px solid #8c927f; border-radius:4px; background:linear-gradient(90deg,rgba(255,255,255,.65),transparent 22%),repeating-linear-gradient(0deg,transparent 0 13px,rgba(25,52,61,.18) 13px 14px),linear-gradient(#f8edd0 0 35%,var(--strip-color,#e8cf65) 35%); box-shadow:3px 5px 0 rgba(0,0,0,.13),inset -3px 0 rgba(25,52,61,.1); transform:rotate(-12deg); transition:transform .2s; cursor:grab; touch-action:none; }
+    .strip:active { cursor:grabbing; }
+    .strip.is-armed { transform:rotate(0deg) scale(1.08); outline:3px solid #edaf42; outline-offset:5px; }
+    .strip.is-dragging { opacity:.55; }
+    .scale-cell { border:1px solid rgba(25,52,61,.2); box-shadow:inset 0 0 0 1px rgba(255,255,255,.24); }
+    .scale-cell.active { outline:3px solid var(--ink); outline-offset:3px; transform:translateY(-4px); }
+    #scale { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
+    @media (min-width:640px) { #scale { grid-template-columns:repeat(14,minmax(0,1fr)); } }
+    input,select { min-width:0; }
+    :focus-visible { outline:3px solid #e69c32!important; outline-offset:3px; }
+    @media (prefers-reduced-motion:reduce) { *,*:before,*:after { transition:none!important; } }
+  </style>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+</head>
+<body class="app-shell">
+  <div class="w-full max-w-7xl mx-auto px-4 sm:px-7 lg:px-10 py-7 lg:py-10">
+    <header class="mb-7">
+      <div class="flex items-center gap-3 mb-4">
+        <span aria-hidden="true" class="w-10 h-10 rounded-xl bg-[#174c56] text-white grid place-items-center text-xl">⚗</span>
+        <span class="uppercase tracking-[.19em] font-bold text-xs text-[#174c56]">Química · Ácidos y bases</span>
+      </div>
+      <h1 class="display leading-tight mb-2 text-3xl sm:text-5xl font-bold">Laboratorio Virtual de pH y pOH</h1>
+      <p class="max-w-3xl leading-relaxed text-base sm:text-lg">Mide el pH de sustancias cotidianas con una tira indicadora, compara el color con la escala y calcula pOH, [H⁺] y [OH⁻].</p>
+    </header>
+
+    <main class="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,1fr)] gap-6 items-start">
+      <div class="space-y-6 min-w-0">
+        <section class="lab-panel rounded-[26px] overflow-hidden">
+          <div class="px-5 sm:px-7 pt-6 flex flex-wrap justify-between gap-3 items-start">
+            <div>
+              <h2 class="display mb-1 text-2xl font-bold">Mesa de laboratorio</h2>
+              <p class="text-sm sm:text-base">Selecciona la tira y toca un vaso, o arrástrala hasta él.</p>
+            </div>
+            <span class="px-3 py-1.5 rounded-full border border-[#b5cac4] text-xs font-semibold">12 muestras</span>
+          </div>
+          <div class="px-5 sm:px-7 pt-7 pb-6 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+            <div class="flex flex-col items-center shrink-0 rounded-2xl bg-white/70 border border-[#d1ded7] px-6 py-4">
+              <span class="font-bold mb-3 text-center text-sm">Tira indicadora</span>
+              <button id="strip" type="button" draggable="true" aria-pressed="false" aria-label="Seleccionar tira indicadora para medir una sustancia" class="strip"></button>
+              <span class="mt-4 text-center max-w-36 text-xs">Haz clic para activarla o arrástrala a un vaso.</span>
+            </div>
+            <div class="flex-1 w-full min-w-0">
+              <div class="bench rounded-2xl p-3 sm:p-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-1 sm:gap-2 justify-items-center">
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="2" data-name="Jugo de limón" aria-label="Medir jugo de limón, pH aproximado 2"><span class="beaker"><span class="liquid" style="--liquid:#f8d866"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Jugo de limón</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="3" data-name="Vinagre" aria-label="Medir vinagre, pH aproximado 3"><span class="beaker"><span class="liquid" style="--liquid:#dfa573"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Vinagre</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="4" data-name="Vino" aria-label="Medir vino, pH aproximado 4"><span class="beaker"><span class="liquid" style="--liquid:#ae4860"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Vino</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="5" data-name="Café" aria-label="Medir café, pH aproximado 5"><span class="beaker"><span class="liquid" style="--liquid:#87543c"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Café</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="6" data-name="Leche" aria-label="Medir leche, pH aproximado 6"><span class="beaker"><span class="liquid" style="--liquid:#eee9d7"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Leche</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="7" data-name="Agua destilada" aria-label="Medir agua destilada, pH aproximado 7"><span class="beaker"><span class="liquid" style="--liquid:#a8d8df"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Agua destilada</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="7" data-name="Sangre" aria-label="Medir sangre, pH aproximado 7 en esta escala de valores enteros"><span class="beaker"><span class="liquid" style="--liquid:#a93543"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Sangre</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="9" data-name="Jabón líquido" aria-label="Medir jabón líquido, pH aproximado 9"><span class="beaker"><span class="liquid" style="--liquid:#9bd0b7"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Jabón líquido</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="10" data-name="Detergente de ropa" aria-label="Medir detergente de ropa, pH aproximado 10"><span class="beaker"><span class="liquid" style="--liquid:#79b9d5"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Detergente de ropa</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="10" data-name="Leche de magnesia" aria-label="Medir leche de magnesia, pH aproximado 10"><span class="beaker"><span class="liquid" style="--liquid:#e0e5dd"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Leche de magnesia</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="11" data-name="Amoníaco doméstico" aria-label="Medir amoníaco doméstico, pH aproximado 11"><span class="beaker"><span class="liquid" style="--liquid:#b5d8cc"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Amoníaco doméstico</span></button>
+                  <button type="button" class="sample rounded-xl p-2 flex flex-col items-center gap-2 w-full text-white" data-ph="14" data-name="Hidróxido de sodio" aria-label="Medir hidróxido de sodio en solución concentrada, pH aproximado 14"><span class="beaker"><span class="liquid" style="--liquid:#9bc7e0"></span><span class="glass-shine"></span></span><span class="text-center font-semibold leading-tight text-sm">Hidróxido de sodio</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="border-t border-[#d1ded7] bg-white/55 px-5 sm:px-7 py-3 flex gap-2 items-center">
+            <span aria-hidden="true" class="w-2 h-2 rounded-full bg-[#d69b43] shrink-0"></span>
+            <p id="measurement" role="status" aria-live="polite" class="font-medium text-sm">Selecciona la tira y toca un vaso, o arrástrala hasta él.</p>
+          </div>
+        </section>
+
+        <section class="rounded-[26px] border border-[#d8ddd4] bg-white/70 p-5 sm:p-7">
+          <div class="flex flex-wrap items-baseline justify-between gap-2 mb-5">
+            <h2 class="display text-2xl font-bold">Escala de colores</h2>
+            <span class="text-sm">pH del 1 al 14</span>
+          </div>
+          <div id="scale" aria-label="Escala de colores del pH del 1 al 14" class="gap-1.5"></div>
+          <div class="flex justify-between mt-4 font-semibold text-sm"><span>Ácido</span><span>Neutro</span><span>Básico</span></div>
+        </section>
+      </div>
+
+      <section class="rounded-[26px] border border-[#d8ddd4] bg-white p-5 sm:p-7 shadow-[0_12px_38px_rgba(25,52,61,.07)]">
+        <span class="uppercase tracking-[.16em] font-bold text-xs text-[#174c56]">Desafío</span>
+        <h2 class="display mt-2 mb-2 text-2xl font-bold">Calcula las magnitudes</h2>
+        <p class="leading-relaxed mb-5 text-sm sm:text-base">Mide una muestra, identifica su pH y calcula pOH, [H⁺] y [OH⁻] usando pH + pOH = 14.</p>
+        <div id="challenge-placeholder" class="rounded-2xl bg-[#f1f5f0] border border-dashed border-[#b9cac1] p-6 text-center">
+          <p class="text-sm">Mide una sustancia para comenzar el desafío.</p>
+        </div>
+        <form id="challenge-form" class="hidden space-y-4" novalidate>
+          <div class="rounded-xl bg-[#eff5f1] px-4 py-3"><span class="font-semibold text-sm">Muestra medida:</span> <strong id="current-sample" class="block mt-1"></strong></div>
+          <div><label class="block font-bold mb-1.5 text-sm" for="answer-ph">pH de la muestra</label>
+            <select id="answer-ph" required class="w-full rounded-xl border border-[#bdccc5] bg-white px-3 py-3"><option value="">Selecciona un valor del 1 al 14</option></select></div>
+          <div><label class="block font-bold mb-1.5 text-sm" for="answer-poh">pOH</label>
+            <input id="answer-poh" type="text" inputmode="decimal" autocomplete="off" class="w-full rounded-xl border border-[#bdccc5] px-3 py-3" placeholder="Ej.: 12"></div>
+          <div><label class="block font-bold mb-1.5 text-sm" for="answer-h">[H⁺] en mol/L</label>
+            <input id="answer-h" type="text" inputmode="decimal" autocomplete="off" class="w-full rounded-xl border border-[#bdccc5] px-3 py-3" placeholder="Ej.: 1e-2"></div>
+          <div><label class="block font-bold mb-1.5 text-sm" for="answer-oh">[OH⁻] en mol/L</label>
+            <input id="answer-oh" type="text" inputmode="decimal" autocomplete="off" class="w-full rounded-xl border border-[#bdccc5] px-3 py-3" placeholder="Ej.: 1e-12"></div>
+          <button type="submit" class="w-full rounded-xl px-5 py-3.5 font-bold transition hover:brightness-110 bg-[#174c56] text-white">Comprobar respuestas</button>
+          <div id="feedback" role="status" aria-live="polite" class="hidden rounded-xl p-4 text-sm leading-relaxed"></div>
+        </form>
+        <p class="mt-6 border-t border-[#e5eae4] pt-4 text-xs">Los cálculos suponen una temperatura de 25 °C, donde pH + pOH = 14.</p>
+      </section>
+    </main>
+    <footer class="pt-7"><p class="text-xs">Los valores de pH son aproximados y se redondean a enteros con fines didácticos.</p></footer>
+  </div>
+
+  <script>
+    const colors = ['#d94443','#eb6040','#ee813a','#efa33d','#e9c94a','#b8cb51','#63b860','#39ab88','#349dba','#4088c4','#526fbd','#6859b2','#794b9d','#693983'];
+    const strip = document.getElementById('strip');
+    const scale = document.getElementById('scale');
+    const form = document.getElementById('challenge-form');
+    const feedback = document.getElementById('feedback');
+    const measurement = document.getElementById('measurement');
+    let activePh = null;
+    let armed = false;
+    let pointerStart = null;
+    let suppressClick = false;
+
+    for (let ph = 1; ph <= 14; ph++) {
+      const cell = document.createElement('div');
+      cell.className = 'scale-cell rounded-lg p-1 text-center transition-transform';
+      cell.style.background = colors[ph - 1];
+      cell.dataset.value = ph;
+      cell.setAttribute('aria-label', 'pH ' + ph);
+      const number = document.createElement('span');
+      number.className = 'block font-bold text-sm';
+      number.style.color = ph <= 6 ? '#262c26' : '#fff';
+      number.textContent = ph;
+      cell.appendChild(number);
+      scale.appendChild(cell);
+
+      const option = document.createElement('option');
+      option.value = ph;
+      option.textContent = ph;
+      document.getElementById('answer-ph').appendChild(option);
+    }
+
+    strip.addEventListener('click', () => {
+      if (suppressClick) { suppressClick = false; return; }
+      armed = !armed;
+      strip.classList.toggle('is-armed', armed);
+      strip.setAttribute('aria-pressed', String(armed));
+      measurement.textContent = armed
+        ? 'Tira lista: selecciona un vaso para medirlo.'
+        : 'Selecciona la tira y toca un vaso, o arrástrala hasta él.';
+    });
+
+    strip.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', 'indicator-strip');
+      e.dataTransfer.effectAllowed = 'move';
+      strip.classList.add('is-dragging');
+    });
+    strip.addEventListener('dragend', () => {
+      strip.classList.remove('is-dragging');
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+    strip.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') pointerStart = { x:e.clientX, y:e.clientY };
+    });
+    strip.addEventListener('pointerup', e => {
+      if (!pointerStart) return;
+      if (Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y) > 18) {
+        suppressClick = true;
+        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.sample');
+        if (target) measure(target);
+        setTimeout(() => { suppressClick = false; }, 150);
+      }
+      pointerStart = null;
+    });
+
+    document.querySelectorAll('.sample').forEach(sample => {
+      sample.addEventListener('dragover', e => { e.preventDefault(); sample.classList.add('drag-over'); });
+      sample.addEventListener('dragleave', () => sample.classList.remove('drag-over'));
+      sample.addEventListener('drop', e => {
+        e.preventDefault();
+        sample.classList.remove('drag-over');
+        if (e.dataTransfer.getData('text/plain') === 'indicator-strip') measure(sample);
+      });
+      sample.addEventListener('click', () => measure(sample));
+    });
+
+    function measure(sample) {
+      activePh = Number(sample.dataset.ph);
+      armed = false;
+      strip.classList.remove('is-armed');
+      strip.setAttribute('aria-pressed', 'false');
+      strip.style.setProperty('--strip-color', colors[activePh - 1]);
+      document.querySelectorAll('.sample').forEach(el => el.classList.toggle('selected', el === sample));
+      document.querySelectorAll('.scale-cell').forEach(el => el.classList.toggle('active', Number(el.dataset.value) === activePh));
+      measurement.textContent = 'La tira cambió de color. Compárala con la escala y resuelve el desafío.';
+      document.getElementById('current-sample').textContent = sample.dataset.name;
+      document.getElementById('challenge-placeholder').classList.add('hidden');
+      form.classList.remove('hidden');
+      form.reset();
+      feedback.classList.add('hidden');
+      feedback.replaceChildren();
+    }
+
+    function parseAnswer(raw) {
+      const value = raw.trim().replace(',', '.').replace(/×\s*10\s*\^\s*([+-]?\d+)/i, 'e$1').replace(/\s+/g, '');
+      return value ? Number(value) : NaN;
+    }
+    function closeEnough(actual, expected) {
+      return Number.isFinite(actual) && Math.abs(actual - expected) <= expected * 0.06;
+    }
+    function addLine(parent, text, cls = 'mt-1') {
+      const p = document.createElement('p');
+      p.className = cls;
+      p.textContent = text;
+      parent.appendChild(p);
+    }
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const ph = Number(document.getElementById('answer-ph').value);
+      const poh = parseAnswer(document.getElementById('answer-poh').value);
+      const h = parseAnswer(document.getElementById('answer-h').value);
+      const oh = parseAnswer(document.getElementById('answer-oh').value);
+      const expectedPoh = 14 - activePh;
+      const correct = ph === activePh && Number.isFinite(poh) && Math.abs(poh - expectedPoh) < 0.01 &&
+        closeEnough(h, 10 ** (-activePh)) && closeEnough(oh, 10 ** (-expectedPoh));
+
+      feedback.classList.remove('hidden');
+      feedback.replaceChildren();
+      feedback.className = correct
+        ? 'rounded-xl p-4 text-sm leading-relaxed bg-[#e7f5e9] text-[#17532e]'
+        : 'rounded-xl p-4 text-sm leading-relaxed bg-[#fff2df] text-[#65421a]';
+      if (correct) {
+        addLine(feedback, '¡Correcto! Identificaste el pH y calculaste las tres magnitudes.', 'font-bold');
+      } else {
+        addLine(feedback, 'Revisa tus respuestas. Procedimiento paso a paso:', 'font-bold mb-2');
+        addLine(feedback, '1. Compara el color de la tira con la escala: pH ≈ ' + activePh + '.');
+        addLine(feedback, '2. pOH = 14 − pH = 14 − ' + activePh + ' = ' + expectedPoh + '.');
+        addLine(feedback, '3. [H⁺] = 10^(−pH) = 1e-' + activePh + ' mol/L.');
+        addLine(feedback, '4. [OH⁻] = 10^(−pOH) = 1e-' + expectedPoh + ' mol/L.');
+        addLine(feedback, 'Puedes corregir los campos y comprobar de nuevo.', 'mt-3 font-semibold');
+      }
+    });
+  </script>
+</body>
+</html>
